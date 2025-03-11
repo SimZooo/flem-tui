@@ -38,11 +38,26 @@ impl<T: Copy + fmt::Display + PartialEq> GapBuffer<T> {
         }
     }
 
+    pub fn left(&mut self) {
+        if self.cursor > 0 {
+            for i in self.cursor..self.gap_size {
+                self.buffer[i] = self.buffer[i - 1];
+            }
+            self.cursor -= 1;
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        return self.buffer.len() - self.gap_size
+    }
+
+
     pub fn display(&self) {
         for i in 0..self.buffer.len() {
             if i == self.cursor {
                 print!("[")
-            } if self.buffer[i] == self.gap_value {
+            } 
+            if self.buffer[i] == self.gap_value {
                 print!("_")
             }
             print!("{}", self.buffer[i]);
@@ -55,5 +70,17 @@ impl<T: Copy + fmt::Display + PartialEq> GapBuffer<T> {
 
     pub fn to_string(&self) -> String {
         self.buffer.iter().filter(|&&c| c != self.gap_value).map(|c| c.to_string()).collect()
+    }
+}
+
+impl From<Vec<u8>> for GapBuffer<char> {
+    fn from(value: Vec<u8>) -> Self {
+        let content = value.iter().map(|c| *c as char).collect::<Vec<char>>();
+        GapBuffer {
+            buffer: content,
+            gap_size: 10,
+            gap_value: '\0',
+            cursor: 0,
+        }
     }
 }
