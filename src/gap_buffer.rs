@@ -38,10 +38,26 @@ impl<T: Copy + fmt::Display + PartialEq> GapBuffer<T> {
         }
     }
 
+    pub fn right(&mut self) {
+        let n = self.buffer.len() as i32 - self.gap_size as i32;
+        if (self.cursor as i32) < n {
+            let mut i = self.cursor + self.gap_size;
+            while i > self.cursor {
+                let temp = self.buffer[i - 1];
+                self.buffer[i - 1] = self.buffer[i];
+                self.buffer[i] = temp;
+                i -= 1;
+            }
+            self.cursor += 1;
+        }
+    }
+
     pub fn left(&mut self) {
         if self.cursor > 0 {
-            for i in self.cursor..self.gap_size {
+            for i in self.cursor..(self.cursor + self.gap_size) {
+                let temp = self.buffer[i];
                 self.buffer[i] = self.buffer[i - 1];
+                self.buffer[i - 1] = temp;
             }
             self.cursor -= 1;
         }
@@ -69,7 +85,8 @@ impl<T: Copy + fmt::Display + PartialEq> GapBuffer<T> {
     }
 
     pub fn to_string(&self) -> String {
-        self.buffer.iter().filter(|&&c| c != self.gap_value).map(|c| c.to_string()).collect()
+        //self.buffer.iter().filter(|&&c| c != self.gap_value).map(|c| c.to_string()).collect()
+        self.buffer.iter().map(|c| c.to_string()).collect()
     }
 }
 

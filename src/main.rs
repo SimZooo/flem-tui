@@ -2,24 +2,36 @@ use std::io::{self, Error};
 mod gap_buffer;
 use crossterm::event::{self, Event, KeyEventKind, KeyCode};
 use gap_buffer::*;
-use ratatui::{DefaultTerminal, Frame, widgets::{Widget, Paragraph}, layout::{Position, Layout, Direction, Constraint}};
+use ratatui::{DefaultTerminal, Frame, widgets::{Widget, Paragraph}, layout::{Position, Layout, Direction, Constraint, Positions}};
 
 #[derive(Debug)]
 pub struct App {
     pub exit: bool,
     pub buffer: GapBuffer<char>,
     // (Line, n)
-    pub lines: Vec<(usize, usize)>,
+    pub lines: Vec<usize>,
+    pub filename: String,
 }
 
 impl App {
     fn from_file(file: &String) -> Result<Self, ()> {
         if let Ok(content) = std::fs::read(file) {
             let gap_buffer = GapBuffer::from(content);
+            let mut lines = Vec::default();
+            for c in &gap_buffer.buffer {
+                if *c == '\n' {
+                    lines.push(0);
+                } else {
+                    if let Some(last) = lines.last_mut() {
+                        *last += 1;
+                    }
+                }
+            }
             Ok(App {
                 exit: false,
                 buffer: gap_buffer,
-                lines: Vec::default()
+                lines,
+                filename: file.to_string()
             })
         } else {
             Err(())
@@ -32,7 +44,8 @@ impl Default for App {
         Self {
             exit: false,
             buffer: GapBuffer::new(10, '\0'),
-            lines: vec![(1, 0); 1]
+            lines: vec![0],
+            filename: "undefined".to_string()
         }
     }
 }
@@ -43,10 +56,13 @@ impl Widget for &App {
             vec![Constraint::Percentage(95), Constraint::Percentage(5)]
             ).split(area);
         let info_layout = Layout::default().direction(Direction::Horizontal).constraints(
-            vec![Constraint::Percentage(80), Constraint::Percentage(20)]
-            ).split(area);
+            vec![Constraint::Percentage(96), Constraint::Percentage(4)]
+            ).split(layout[1]);
         Paragraph::new(self.buffer.to_string()).render(layout[0], buf);
-        Paragraph::new(self.get_cursor_pos().to_string()).render(layout[1], buf);
+
+        let cursor_pos = self.get_cursor_pos();
+        Paragraph::new(self.filename.clone()).render(info_layout[0], buf);
+        Paragraph::new(format!("{}:{}", cursor_pos.x, cursor_pos.y)).render(info_layout[1], buf);
     }
 }
 
@@ -68,14 +84,14 @@ impl App {
     }
 
     fn get_cursor_pos(&self) -> Position {
-        let char_info = self.lines.last();
-        if let Some(char_info) = char_info {
-            if let Some(last) = self.lines.last() {
-                let cursor_x = self.buffer.len() as i32 - self.buffer.cursor as i32 + last.1 as i32;
-                return Position::new(cursor_x as u16, char_info.0 as u16 - 1);
+        let mut position = 0;
+        for (i, line) in self.lines.iter().enumerate() {
+            if self.buffer.cursor < position + line {
+                return Position::new(self.buffer.cursor as u16  - position as u16, i as u16);
             }
+            position += *line;
         }
-        Position::default()
+        return Position::new(self.lines[self.lines.len() - 1] as u16, self.lines.len() as u16 - 1);
     }
 
     fn handle_events(&mut self) -> io::Result<()> {
@@ -85,7 +101,7 @@ impl App {
                     KeyCode::Char(ch) => {
                         self.buffer.insert(ch);
                         if let Some(last) = self.lines.last_mut() {
-                            last.1 += 1;
+                            *last += 1;
                         }
                     },
                     KeyCode::Esc => {
@@ -94,8 +110,8 @@ impl App {
                     KeyCode::Backspace => {
                         self.buffer.delete();
                         if let Some(last) = self.lines.last_mut() {
-                            if last.1 > 0 {
-                                last.1 -= 1;
+                            if *last > 0 {
+                                *last -= 1;
                             } else if self.lines.len() > 1 {
                                 self.lines.pop();
                             }
@@ -103,12 +119,14 @@ impl App {
                     },
                     KeyCode::Enter => {
                         self.buffer.insert('\n');
-                        let n = self.lines.len();
-                        self.lines.push((n + 1, 0));
+                        self.lines.push(0);
                     },
                     KeyCode::Left => {
                         self.buffer.left();
-                    }
+                    },
+                    KeyCode::Right => {
+                        self.buffer.right();
+                    },
                     _ => {}
                 }
             },
